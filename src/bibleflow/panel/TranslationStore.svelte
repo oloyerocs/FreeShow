@@ -1,18 +1,17 @@
 <script lang="ts">
     import { LicenseManager, InMemoryLicenseStore } from "../licensing/LicenseManager"
-    import { BibleStore } from "../translations/BibleStore"
+    import type { License } from "../licensing/LicenseManager"
     import { onMount } from "svelte"
 
-    // In production this store would be backed by electron-store.
-    // The LicenseManager is shared with BibleStore via module-level singleton.
-    const licenseStore = new InMemoryLicenseStore()
-
+    // Online validator stub — replace with a real server call once you have
+    // a backend. Any correctly-formatted key is accepted for now.
     async function onlineValidator(key: string, translationId: string): Promise<boolean> {
-        // Stub — replace with real licence-server call in production.
-        // Format is already validated before this is called.
-        return key.startsWith("BF") && translationId.length > 0
+        return key.toUpperCase().startsWith("BF") && translationId.length > 0
     }
 
+    // Use InMemoryLicenseStore as the working store; seed it from persistence
+    // on mount and flush back on every activate/revoke.
+    const licenseStore = new InMemoryLicenseStore()
     const mgr = new LicenseManager(licenseStore, onlineValidator)
 
     const TRANSLATIONS = [
@@ -28,49 +27,53 @@
     let errors: Record<string, string> = {}
     let licensed: Record<string, boolean> = {}
 
-    function refresh() {
-        TRANSLATIONS.forEach((t) => {
-            licensed[t.id] = t.free || mgr.isLicensed(t.id)
-        })
+    function refreshLicensed() {
+        TRANSLATIONS.forEach((t) => { licensed[t.id] = t.free || mgr.isLicensed(t.id) })
         licensed = { ...licensed }
     }
 
-    onMount(refresh)
+    async function persistLicenses() {
+        try {
+            await (window as any).api.invoke("BIBLEFLOW_SETTINGS", {
+                op: "set",
+                data: { licenses: mgr.listLicenses() },
+            })
+        } catch { /* non-fatal */ }
+    }
+
+    onMount(async () => {
+        // Seed from persisted licenses
+        try {
+            const saved = await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "get" })
+            const savedLicenses: License[] = saved?.licenses ?? []
+            for (const l of savedLicenses) licenseStore.set(l)
+        } catch { /* offline or test env */ }
+        refreshLicensed()
+    })
 
     async function activate(translationId: string) {
         const key = keyInputs[translationId]?.trim()
-        if (!key) {
-            errors[translationId] = "Enter a license key"
-            errors = { ...errors }
-            return
-        }
-        statuses[translationId] = "activating"
-        statuses = { ...statuses }
-        errors[translationId] = ""
-        errors = { ...errors }
+        if (!key) { errors[translationId] = "Enter a license key"; errors = { ...errors }; return }
+        statuses[translationId] = "activating"; statuses = { ...statuses }
+        errors[translationId] = ""; errors = { ...errors }
 
         const result = await mgr.activate(key, translationId)
         if (result.ok) {
             statuses[translationId] = "ok"
-            keyInputs[translationId] = ""
-            keyInputs = { ...keyInputs }
-            refresh()
+            keyInputs[translationId] = ""; keyInputs = { ...keyInputs }
+            refreshLicensed()
+            await persistLicenses()
         } else {
             statuses[translationId] = "error"
-            errors[translationId] = result.error ?? "Activation failed"
-            errors = { ...errors }
+            errors[translationId] = result.error ?? "Activation failed"; errors = { ...errors }
         }
-        setTimeout(() => {
-            if (statuses[translationId] !== "activating") {
-                statuses[translationId] = "idle"
-                statuses = { ...statuses }
-            }
-        }, 3000)
+        setTimeout(() => { if (statuses[translationId] !== "activating") { statuses[translationId] = "idle"; statuses = { ...statuses } } }, 3000)
     }
 
-    function revoke(translationId: string) {
+    async function revoke(translationId: string) {
         mgr.revoke(translationId)
-        refresh()
+        refreshLicensed()
+        await persistLicenses()
     }
 </script>
 
@@ -133,131 +136,29 @@
 </div>
 
 <style>
-    .store {
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        height: 100%;
-        overflow-y: auto;
-    }
-    .store-header h2 {
-        font-size: 1.05em;
-        margin: 0 0 4px;
-        color: var(--text);
-    }
-    .sub {
-        font-size: 0.78em;
-        color: var(--text-light);
-        margin: 0;
-    }
-    .translation-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-    .translation-row {
-        padding: 12px 14px;
-        border-radius: 8px;
-        background: var(--primary-darker);
-        border: 1px solid var(--primary-lighter);
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .translation-row.licensed {
-        border-color: #27ae60;
-    }
-    .info {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    .name {
-        font-weight: 600;
-        font-size: 0.9em;
-        color: var(--text);
-    }
-    .id-badge {
-        font-size: 0.72em;
-        background: var(--primary-lighter);
-        border-radius: 4px;
-        padding: 1px 6px;
-        color: var(--text-light);
-        font-family: monospace;
-    }
-    .tag {
-        font-size: 0.7em;
-        font-weight: 700;
-        padding: 2px 7px;
-        border-radius: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
+    .store { padding: 16px; display: flex; flex-direction: column; gap: 16px; height: 100%; overflow-y: auto; }
+    .store-header h2 { font-size: 1.05em; margin: 0 0 4px; color: var(--text); }
+    .sub { font-size: 0.78em; color: var(--text-light); margin: 0; }
+    .translation-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+    .translation-row { padding: 12px 14px; border-radius: 8px; background: var(--primary-darker); border: 1px solid var(--primary-lighter); display: flex; flex-direction: column; gap: 8px; }
+    .translation-row.licensed { border-color: #27ae60; }
+    .info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .name { font-weight: 600; font-size: 0.9em; color: var(--text); }
+    .id-badge { font-size: 0.72em; background: var(--primary-lighter); border-radius: 4px; padding: 1px 6px; color: var(--text-light); font-family: monospace; }
+    .tag { font-size: 0.7em; font-weight: 700; padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
     .free   { background: #1a4a2e; color: #4ade80; }
     .active { background: #1a3a1a; color: #27ae60; }
     .locked { background: #3a1a1a; color: #e06060; }
-
-    .activate-row {
-        display: flex;
-        gap: 6px;
-    }
-    input[type="text"] {
-        flex: 1;
-        background: var(--primary);
-        border: 1px solid var(--primary-lighter);
-        border-radius: 5px;
-        padding: 5px 8px;
-        color: var(--text);
-        font-size: 0.82em;
-        font-family: monospace;
-        letter-spacing: 0.05em;
-    }
+    .activate-row { display: flex; gap: 6px; }
+    input[type="text"] { flex: 1; background: var(--primary); border: 1px solid var(--primary-lighter); border-radius: 5px; padding: 5px 8px; color: var(--text); font-size: 0.82em; font-family: monospace; letter-spacing: 0.05em; }
     input.error-input { border-color: #e74c3c; }
-    .activate-btn {
-        padding: 5px 14px;
-        border: none;
-        border-radius: 5px;
-        background: var(--secondary);
-        color: #fff;
-        font-size: 0.82em;
-        cursor: pointer;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
+    .activate-btn { padding: 5px 14px; border: none; border-radius: 5px; background: var(--secondary); color: #fff; font-size: 0.82em; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
     .activate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .activate-btn.success  { background: #27ae60; }
-    .activate-btn.fail     { background: #c0392b; }
-    .revoke-btn {
-        align-self: flex-start;
-        padding: 3px 10px;
-        border: 1px solid var(--primary-lighter);
-        border-radius: 4px;
-        background: transparent;
-        color: var(--text-light);
-        font-size: 0.75em;
-        cursor: pointer;
-    }
+    .activate-btn.success { background: #27ae60; }
+    .activate-btn.fail    { background: #c0392b; }
+    .revoke-btn { align-self: flex-start; padding: 3px 10px; border: 1px solid var(--primary-lighter); border-radius: 4px; background: transparent; color: var(--text-light); font-size: 0.75em; cursor: pointer; }
     .revoke-btn:hover { color: #e74c3c; border-color: #e74c3c; }
-    .err-msg {
-        font-size: 0.75em;
-        color: #e74c3c;
-        margin: 0;
-    }
-    .footnote {
-        font-size: 0.72em;
-        color: var(--text-light);
-        line-height: 1.6;
-        margin: 0;
-    }
-    code {
-        font-family: monospace;
-        background: var(--primary-darker);
-        padding: 1px 5px;
-        border-radius: 3px;
-    }
+    .err-msg { font-size: 0.75em; color: #e74c3c; margin: 0; }
+    .footnote { font-size: 0.72em; color: var(--text-light); line-height: 1.6; margin: 0; }
+    code { font-family: monospace; background: var(--primary-darker); padding: 1px 5px; border-radius: 3px; }
 </style>

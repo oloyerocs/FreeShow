@@ -1,5 +1,6 @@
 <script lang="ts">
     import { writable } from "svelte/store"
+    import { onMount } from "svelte"
     import { DEFAULT_THEME } from "../config"
     import type { BibleFlowTheme } from "../config"
     import { exportTheme, importTheme } from "../theme-designer/ThemeSchema"
@@ -13,7 +14,26 @@
 
     type Position = BibleFlowTheme["position"]
     function setPosition(pos: string) { theme.update((t) => ({ ...t, position: pos as Position })) }
-    function reset() { theme.set({ ...DEFAULT_THEME }) }
+    function reset() { theme.set({ ...DEFAULT_THEME }); persist({ ...DEFAULT_THEME }) }
+
+    async function persist(t: BibleFlowTheme) {
+        try { await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "set", data: { theme: t } }) }
+        catch { /* non-fatal */ }
+    }
+
+    // Persist on every change (debounced via Svelte reactive)
+    let _persistTimer: ReturnType<typeof setTimeout> | null = null
+    theme.subscribe((t) => {
+        if (_persistTimer) clearTimeout(_persistTimer)
+        _persistTimer = setTimeout(() => persist(t), 400)
+    })
+
+    onMount(async () => {
+        try {
+            const saved = await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "get" })
+            if (saved?.theme) theme.set({ ...DEFAULT_THEME, ...saved.theme })
+        } catch { /* offline or test env */ }
+    })
 
     function doExport() {
         const json = exportTheme({ version: 1, ...$theme })
