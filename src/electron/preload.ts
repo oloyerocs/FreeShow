@@ -51,6 +51,9 @@ contextBridge.exposeInMainWorld("api", {
     getListeners: () => {
         return ipcRenderer.eventNames().map((channel) => [channel.toString(), ipcRenderer.listenerCount(channel)])
     },
+    invoke: (channel: ValidChannels, data: any) => {
+        return ipcRenderer.invoke(channel, data)
+    },
     // https://www.electronjs.org/blog/electron-32-0#breaking-changes
     showFilePath(file: File) {
         return webUtils.getPathForFile(file)
