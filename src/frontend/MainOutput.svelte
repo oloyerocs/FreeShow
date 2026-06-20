@@ -10,6 +10,8 @@
     import { currentWindow, livePrepare, outputs, special, styles } from "./stores"
     import { hideDisplay } from "./utils/common"
     import { send } from "./utils/request"
+    import { BIBLEFLOW_ENABLED } from "../bibleflow/config"
+    import BibleFlowOverlay from "../bibleflow/display-renderer/BibleFlowOverlay.svelte"
 
     $: outputId = Object.keys($outputs)[0]
 
@@ -61,6 +63,11 @@
         <StageLayout {outputId} stageId={$outputs[outputId].stageOutput} edit={false} />
     {:else if loaded}
         <Output {outputId} style={getStyleResolution(resolution, width, height, "fit")} />
+    {/if}
+
+    <!-- BibleFlow verse overlay — only rendered when feature flag is on -->
+    {#if BIBLEFLOW_ENABLED}
+        <BibleFlowOverlay />
     {/if}
 
     <!-- black overlay for live preparation/changes -->

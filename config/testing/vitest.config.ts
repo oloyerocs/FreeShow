@@ -6,6 +6,9 @@ import { defineConfig } from "vitest/config"
 // This config sits in config/testing/, so point the root back at the project root.
 export default defineConfig({
     root: fileURLToPath(new URL("../../", import.meta.url)),
+    define: {
+        __BIBLEFLOW_ENABLED__: process.env.BIBLEFLOW !== "false",
+    },
     test: {
         include: ["src/**/*.test.ts"],
         environment: "node"

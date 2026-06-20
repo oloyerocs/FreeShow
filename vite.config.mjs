@@ -3,8 +3,12 @@ import { svelte } from "@sveltejs/vite-plugin-svelte"
 import sveltePreprocess from "svelte-preprocess"
 
 const production = process.env.NODE_ENV === "production"
+const bibleflowEnabled = process.env.BIBLEFLOW !== "false"
 
 export default defineConfig({
+    define: {
+        __BIBLEFLOW_ENABLED__: bibleflowEnabled,
+    },
     plugins: [
         svelte({
             preprocess: sveltePreprocess({

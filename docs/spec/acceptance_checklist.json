@@ -1,0 +1,209 @@
+{
+  "project": "BibleFlow",
+  "version": "1.0.0",
+  "generatedAt": "2026-06-20",
+  "totalFRs": 13,
+  "checklist": [
+    {
+      "id": "FR-00",
+      "title": "Feature Flag & Zero-Regression Guard",
+      "description": "BIBLEFLOW_ENABLED env var gates all BibleFlow code paths. When false, FreeShow behaves identically to the upstream fork.",
+      "criteria": [
+        "Setting BIBLEFLOW=false at build time produces a bundle with no BibleFlow imports reachable at runtime",
+        "All 37 original FreeShow tests pass with BIBLEFLOW=false",
+        "No console errors or warnings when BibleFlow is disabled",
+        "BIBLEFLOW IPC channel is never registered when flag is false"
+      ],
+      "testFile": "src/bibleflow/bibleflow-display.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-01",
+      "title": "External Display Integration (Option A)",
+      "description": "BibleFlow reuses FreeShow's OutputSend.sendToOutputWindow() via a new BIBLEFLOW IPC channel. No competing BrowserWindows are created.",
+      "criteria": [
+        "BIBLEFLOW channel registered in src/types/Channels.ts and ValidChannels union",
+        "ipcMain.on(BIBLEFLOW) handler fans out messages to all output windows via OutputHelper.Send.sendToOutputWindow",
+        "BibleFlowOverlay.svelte mounts inside the existing output window (not a new window)",
+        "Overlay unmounts cleanly on destroy without leaking IPC listeners",
+        "9 smoke tests pass in bibleflow-display.test.ts"
+      ],
+      "testFile": "src/bibleflow/bibleflow-display.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-02",
+      "title": "Broadcast Controller",
+      "description": "State machine managing auto/manual broadcast modes, verse queue, cooldown, and confidence threshold.",
+      "criteria": [
+        "Starts in manual mode by default",
+        "Enqueues verses and deduplicates by reference+translation",
+        "Manual mode: approve(id) sends exactly that verse and removes it from queue",
+        "Auto mode: sends highest-confidence verse after cooldownMs elapses",
+        "Auto mode: respects confidenceThreshold — skips below-threshold verses",
+        "Auto mode: cooldown prevents re-send before interval elapses",
+        "clearDisplay() sends null and sets active to null",
+        "DEFAULT_STATE.queue is never mutated across controller instances",
+        "9 tests pass in BroadcastController.test.ts"
+      ],
+      "testFile": "src/bibleflow/broadcast/BroadcastController.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-03",
+      "title": "Transcription Adapters",
+      "description": "Pluggable transcription backend — Deepgram (WebSocket PCM) and Whisper (local HTTP). TranscriptionManager builds and switches providers.",
+      "criteria": [
+        "TranscriptionAdapter interface defines name, start(deviceId, onSegment), stop(), isRunning()",
+        "DeepgramAdapter streams 16kHz Int16Array PCM over WebSocket; API key never hardcoded",
+        "WhisperAdapter posts 5-second MediaRecorder chunks to localhost:8080/inference",
+        "TranscriptionManager.build('deepgram'|'whisper') returns correct adapter",
+        "Switching provider calls stop() on previous and start() on new adapter",
+        "4 tests pass in TranscriptionManager.test.ts"
+      ],
+      "testFile": "src/bibleflow/transcription-adapter/TranscriptionManager.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-04",
+      "title": "Bible Reference Parser & Verse Detector",
+      "description": "Regex-based parser covering all 66 canonical books with aliases. Detects references in free text and maps to DetectedVerse objects.",
+      "criteria": [
+        "All 66 canonical book names recognized",
+        "Common abbreviations and aliases recognized (e.g. 'Ps', 'Rev', '1 Cor')",
+        "Verse range notation parsed (e.g. 'John 3:16-17')",
+        "parseReferences returns empty array for text with no references",
+        "formatReference produces canonical string (e.g. 'John 3:16')",
+        "VerseDetector maps parsed refs to DetectedVerse with configurable translation",
+        "9 tests pass in BibleReferenceParser.test.ts"
+      ],
+      "testFile": "src/bibleflow/verse-detection/BibleReferenceParser.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-05",
+      "title": "Theme Designer",
+      "description": "Typed BibleFlowThemeV1 schema with versioned JSON import/export. Merges with defaults on import.",
+      "criteria": [
+        "BibleFlowThemeV1 has version:1 discriminator field",
+        "exportTheme() produces valid JSON string",
+        "importTheme() parses and merges with DEFAULT_THEME",
+        "importTheme() throws on wrong version",
+        "importTheme() throws on non-JSON input",
+        "5 tests pass in ThemeSchema.test.ts"
+      ],
+      "testFile": "src/bibleflow/theme-designer/ThemeSchema.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-06",
+      "title": "Multi-Output Router",
+      "description": "Routes verse display to main output, alternate output, or both independently.",
+      "criteria": [
+        "OutputTarget type is 'main'|'alternate'|'both'",
+        "MultiOutputRouter sends to correct target(s) based on config",
+        "Routing does not affect FreeShow's own output logic"
+      ],
+      "testFile": "src/bibleflow/display-renderer/MultiOutputRouter.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-07",
+      "title": "Remote Control (HTTP + OSC)",
+      "description": "Local HTTP REST API on 127.0.0.1:47921 with Bearer token auth. OSC/UDP on port 57121.",
+      "criteria": [
+        "HTTP server binds only to 127.0.0.1 (never 0.0.0.0)",
+        "GET /status returns 200 with current state",
+        "POST /send dispatches verse",
+        "POST /clear clears display",
+        "POST /queue/approve approves queued verse by id",
+        "Requests without valid Bearer token return 401",
+        "OSC /bibleflow/send, /bibleflow/clear, /bibleflow/approve handled",
+        "5 tests pass in HttpApiServer.test.ts"
+      ],
+      "testFile": "src/bibleflow/remote-control/HttpApiServer.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-08",
+      "title": "Bible Store (Translations)",
+      "description": "Public-domain KJV and ASV bundled. Licensed translations (NIV/ESV/NLT) gated behind LicenseManager. Lookup via bible-api.com.",
+      "criteria": [
+        "KJV and ASV available without license",
+        "NIV/ESV/NLT return error when not licensed",
+        "NIV/ESV/NLT accessible when licensed",
+        "lookup() calls bible-api.com with correct parameters",
+        "5 tests pass in BibleStore.test.ts"
+      ],
+      "testFile": "src/bibleflow/translations/BibleStore.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-09",
+      "title": "Audio Input Manager",
+      "description": "Device selection, gain control (±40 dB clamped), and Web Audio API integration.",
+      "criteria": [
+        "setDevice(id) changes active input device",
+        "setGain(dB) clamps to ±40 dB",
+        "attachGainNode() wires node into AudioContext graph",
+        "listDevices() returns available audio input devices",
+        "5 tests pass in AudioInputManager.test.ts"
+      ],
+      "testFile": "src/bibleflow/audio/AudioInputManager.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-10",
+      "title": "Sermon Notes Manager",
+      "description": "Accumulates transcript, deduplicates references, generates AI outline via injected function, exports Markdown and plain text.",
+      "criteria": [
+        "appendTranscript() accumulates text",
+        "addReference() deduplicates by canonical reference string",
+        "generateOutline() calls injected AI function and returns result",
+        "exportMarkdown() includes header, references section, and transcript",
+        "exportPlainText() produces plain string without Markdown syntax",
+        "5 tests pass in SermonNotesManager.test.ts"
+      ],
+      "testFile": "src/bibleflow/sermon-notes/SermonNotesManager.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-11",
+      "title": "i18n Strings",
+      "description": "24-key BibleFlowStrings type, EN built-in, setLocale/registerLocale/t API, falls back to EN for missing keys.",
+      "criteria": [
+        "All 24 BibleFlowStrings keys defined in EN locale",
+        "setLocale('en') and t(key) return correct strings",
+        "Unknown locale falls back to EN",
+        "registerLocale() allows custom locales",
+        "Untranslated keys in custom locale fall through to EN",
+        "4 tests pass in strings.test.ts"
+      ],
+      "testFile": "src/bibleflow/i18n/strings.test.ts",
+      "status": "pass"
+    },
+    {
+      "id": "FR-12",
+      "title": "License Manager",
+      "description": "Key format validation, online activation, offline fallback, revocation, and list. Format: BFXX-XXXX-XXXX-XXXX.",
+      "criteria": [
+        "Malformed key rejected without calling online validator",
+        "Valid key + online=true activates license and marks offlineValid",
+        "Valid key + online=false (validator rejects) returns error",
+        "Offline use allowed if key was previously validated online",
+        "revoke() removes license",
+        "listLicenses() returns all active licenses",
+        "6 tests pass in LicenseManager.test.ts"
+      ],
+      "testFile": "src/bibleflow/licensing/LicenseManager.test.ts",
+      "status": "pass"
+    }
+  ],
+  "testSummary": {
+    "total": 104,
+    "passing": 104,
+    "failing": 0,
+    "freeShowOriginal": 37,
+    "biblFlowNew": 67
+  }
+}

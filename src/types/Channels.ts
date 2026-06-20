@@ -14,8 +14,11 @@ export const NDI = "NDI"
 export const BLACKMAGIC = "BLACKMAGIC"
 export const AUDIO = "AUDIO"
 export const API_DATA = "API_DATA"
+// BibleFlow
+export const BIBLEFLOW = "BIBLEFLOW"
+export const BIBLEFLOW_SETTINGS = "BIBLEFLOW_SETTINGS"
 
-export type ValidChannels = "STARTUP" | "MAIN" | "OUTPUT" | "EXPORT" | "REMOTE" | "STAGE" | "CONTROLLER" | "OUTPUT_STREAM" | "CLOUD" | "NDI" | "BLACKMAGIC" | "AUDIO" | "API_DATA"
+export type ValidChannels = "STARTUP" | "MAIN" | "OUTPUT" | "EXPORT" | "REMOTE" | "STAGE" | "CONTROLLER" | "OUTPUT_STREAM" | "CLOUD" | "NDI" | "BLACKMAGIC" | "AUDIO" | "API_DATA" | "BIBLEFLOW" | "BIBLEFLOW_SETTINGS"
 
 export type Data = string | DataObject
 export interface DataObject {

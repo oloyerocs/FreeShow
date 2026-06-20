@@ -3,7 +3,7 @@
 
 import type { Rectangle } from "electron"
 import { BrowserWindow, Menu, app, ipcMain, powerSaveBlocker, protocol, screen } from "electron"
-import { AUDIO, BLACKMAGIC, CLOUD, EXPORT, MAIN, NDI, OUTPUT, STARTUP } from "../types/Channels"
+import { AUDIO, BIBLEFLOW, BIBLEFLOW_SETTINGS, BLACKMAGIC, CLOUD, EXPORT, MAIN, NDI, OUTPUT, STARTUP } from "../types/Channels"
 import { Main } from "../types/IPC/Main"
 import type { Dictionary } from "../types/Settings"
 import { receiveAudio } from "./audio/receiveAudio"
@@ -357,6 +357,38 @@ ipcMain.on(CLOUD, cloudConnect)
 ipcMain.on(NDI, receiveNDI)
 ipcMain.on(BLACKMAGIC, receiveBM)
 ipcMain.on(AUDIO, receiveAudio)
+ipcMain.on(BIBLEFLOW, (_e, msg) => OutputHelper.Send.sendToOutputWindow(msg))
+if (BIBLEFLOW_SETTINGS) {
+    const { registerBibleFlowSettingsHandler } = require("../bibleflow/persist/BibleFlowSettings")
+    registerBibleFlowSettingsHandler(ipcMain, config)
+}
+
+// BibleFlow remote control — HTTP (47921) + OSC/UDP (57121)
+// Started after app is ready so ports are available.
+// Command handler fans messages into the existing output-window pipeline.
+if (typeof __BIBLEFLOW_ENABLED__ !== "undefined" && __BIBLEFLOW_ENABLED__) {
+    const { RemoteControlManager } = require("../bibleflow/remote-control/RemoteControlManager")
+    const savedToken: string = config.get("bibleflow.apiToken", "") || ""
+    const remoteControl = new RemoteControlManager(
+        { token: savedToken || undefined },
+        (cmd: any) => {
+            if (cmd.type === "send")   OutputHelper.Send.sendToOutputWindow({ type: "BIBLEFLOW_VERSE", verse: cmd.verse })
+            if (cmd.type === "clear")  OutputHelper.Send.sendToOutputWindow({ type: "BIBLEFLOW_VERSE", verse: null })
+            // queue_approve and status are UI-side operations — emit to renderer
+            if (cmd.type === "queue_approve") sendMain("BIBLEFLOW_REMOTE_APPROVE", { id: cmd.id })
+            if (cmd.type === "status")        return config.get("bibleflow", {})
+        }
+    )
+    app.on("ready", () => {
+        remoteControl.start().catch((e: Error) => console.error("[BibleFlow] Remote control failed to start:", e.message))
+        // persist generated token so it survives restarts
+        if (!savedToken) {
+            const bfSettings = config.get("bibleflow", {}) as any
+            config.set("bibleflow", { ...bfSettings, apiToken: remoteControl.token })
+        }
+    })
+    app.on("will-quit", () => remoteControl.stop().catch(() => {}))
+}
 
 // send messages to main frontend (should not be used anymore - use sendMain() instead)
 export const toApp = (channel: string, ...args: any[]): void => {

@@ -292,6 +292,8 @@
         "_title_calendar": "Events",
         "settings": "Settings",
         "_title_settings": "Settings",
+        "bibleflow": "BibleFlow",
+        "_title_bibleflow": "BibleFlow — Live verse detection",
         "_title_display": "Present",
         "_title_display_stop": "Stop presentation",
         "again_confirm": "Click again to confirm"

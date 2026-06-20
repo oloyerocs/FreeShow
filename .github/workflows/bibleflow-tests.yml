@@ -1,0 +1,75 @@
+name: BibleFlow Tests
+
+on:
+    push:
+        branches: [feat/bibleflow-integration]
+    pull_request:
+        branches: [main, master, feat/bibleflow-integration]
+
+jobs:
+    unit-tests:
+        name: Unit tests — BIBLEFLOW=${{ matrix.bibleflow }}
+        runs-on: ubuntu-latest
+
+        strategy:
+            fail-fast: false
+            matrix:
+                bibleflow: ["true", "false"]
+
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+
+            - name: Install dependencies (skip native build scripts)
+              run: npm install --ignore-scripts
+
+            - name: Run unit tests
+              run: npx vitest run --config config/testing/vitest.config.ts
+              env:
+                  BIBLEFLOW: ${{ matrix.bibleflow }}
+
+    bundle-size-check:
+        name: Bundle size delta (BIBLEFLOW=false must be ≤ 1 KB smaller)
+        runs-on: ubuntu-latest
+        needs: unit-tests
+
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm install --ignore-scripts
+
+            - name: Build with BIBLEFLOW=true
+              run: npx cross-env NODE_ENV=production BIBLEFLOW=true vite build && cp -r public/build dist-bf-on
+
+            - name: Build with BIBLEFLOW=false
+              run: npx cross-env NODE_ENV=production BIBLEFLOW=false vite build && cp -r public/build dist-bf-off
+
+            - name: Compare bundle sizes (gzip — NFR-01 ≤ 1 KB)
+              run: |
+                  ON_RAW=$(stat -c%s dist-bf-on/build/bundle.js 2>/dev/null || echo 0)
+                  OFF_RAW=$(stat -c%s dist-bf-off/build/bundle.js 2>/dev/null || echo 0)
+                  ON_GZ=$(gzip -c dist-bf-on/build/bundle.js | wc -c)
+                  OFF_GZ=$(gzip -c dist-bf-off/build/bundle.js | wc -c)
+                  DELTA_RAW=$(( ON_RAW - OFF_RAW ))
+                  DELTA_GZ=$(( ON_GZ - OFF_GZ ))
+                  echo "BIBLEFLOW=true  bundle: ${ON_RAW} bytes raw, ${ON_GZ} bytes gzip"
+                  echo "BIBLEFLOW=false bundle: ${OFF_RAW} bytes raw, ${OFF_GZ} bytes gzip"
+                  echo "Delta — raw: ${DELTA_RAW} B  gzip: ${DELTA_GZ} B"
+                  if [ "$DELTA_GZ" -gt 1024 ]; then
+                    echo "::error::BibleFlow gzip overhead (${DELTA_GZ} B) exceeds NFR-01 limit of 1024 B"
+                    exit 1
+                  fi
