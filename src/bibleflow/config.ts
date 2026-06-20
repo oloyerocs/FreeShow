@@ -1,7 +1,10 @@
 // BibleFlow feature flag and default settings.
 // When BIBLEFLOW_ENABLED is false, zero BibleFlow code paths execute in the output window.
-
-export const BIBLEFLOW_ENABLED = typeof process !== "undefined" ? process.env.BIBLEFLOW !== "false" : true
+// __BIBLEFLOW_ENABLED__ is injected by Vite define at build time so Rollup can tree-shake the
+// disabled branch entirely. Falls back to true in environments without the define (tests, SSR).
+declare const __BIBLEFLOW_ENABLED__: boolean
+export const BIBLEFLOW_ENABLED: boolean =
+    typeof __BIBLEFLOW_ENABLED__ !== "undefined" ? __BIBLEFLOW_ENABLED__ : true
 
 export interface BibleFlowVerseMessage {
     reference: string   // e.g. "John 3:16"

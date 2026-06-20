@@ -53,24 +53,23 @@ jobs:
               run: npm install --ignore-scripts
 
             - name: Build with BIBLEFLOW=true
-              run: npx vite build --outDir dist-bf-on
-              env:
-                  BIBLEFLOW: "true"
+              run: npx cross-env NODE_ENV=production BIBLEFLOW=true vite build && cp -r public/build dist-bf-on
 
             - name: Build with BIBLEFLOW=false
-              run: npx vite build --outDir dist-bf-off
-              env:
-                  BIBLEFLOW: "false"
+              run: npx cross-env NODE_ENV=production BIBLEFLOW=false vite build && cp -r public/build dist-bf-off
 
-            - name: Compare bundle sizes
+            - name: Compare bundle sizes (gzip — NFR-01 ≤ 1 KB)
               run: |
-                  ON=$(du -sb dist-bf-on 2>/dev/null | cut -f1 || echo 0)
-                  OFF=$(du -sb dist-bf-off 2>/dev/null | cut -f1 || echo 0)
-                  DELTA=$(( ON - OFF ))
-                  echo "BIBLEFLOW=true  bundle: ${ON} bytes"
-                  echo "BIBLEFLOW=false bundle: ${OFF} bytes"
-                  echo "Delta (BibleFlow overhead): ${DELTA} bytes"
-                  if [ "$DELTA" -gt 1024 ]; then
-                    echo "::error::BibleFlow overhead (${DELTA} B) exceeds NFR-01 limit of 1024 B"
+                  ON_RAW=$(stat -c%s dist-bf-on/build/bundle.js 2>/dev/null || echo 0)
+                  OFF_RAW=$(stat -c%s dist-bf-off/build/bundle.js 2>/dev/null || echo 0)
+                  ON_GZ=$(gzip -c dist-bf-on/build/bundle.js | wc -c)
+                  OFF_GZ=$(gzip -c dist-bf-off/build/bundle.js | wc -c)
+                  DELTA_RAW=$(( ON_RAW - OFF_RAW ))
+                  DELTA_GZ=$(( ON_GZ - OFF_GZ ))
+                  echo "BIBLEFLOW=true  bundle: ${ON_RAW} bytes raw, ${ON_GZ} bytes gzip"
+                  echo "BIBLEFLOW=false bundle: ${OFF_RAW} bytes raw, ${OFF_GZ} bytes gzip"
+                  echo "Delta — raw: ${DELTA_RAW} B  gzip: ${DELTA_GZ} B"
+                  if [ "$DELTA_GZ" -gt 1024 ]; then
+                    echo "::error::BibleFlow gzip overhead (${DELTA_GZ} B) exceeds NFR-01 limit of 1024 B"
                     exit 1
                   fi
