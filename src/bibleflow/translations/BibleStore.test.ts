@@ -1,35 +1,52 @@
-import { describe, it, expect } from "vitest"
-import { BibleStore } from "./BibleStore"
+import { describe, it, expect, vi } from "vitest"
+import { BibleStore, ALL_TRANSLATIONS } from "./BibleStore"
 
 describe("BibleStore", () => {
-    it("lists KJV as available by default", () => {
-        const store = new BibleStore()
-        const kvj = store.listTranslations().find((t) => t.id === "KJV")
-        expect(kvj?.available).toBe(true)
+    it("lists all 7 translations", () => {
+        expect(ALL_TRANSLATIONS).toHaveLength(7)
     })
 
-    it("lists licensed translations as unavailable by default", () => {
-        const store = new BibleStore()
-        const niv = store.listTranslations().find((t) => t.id === "NIV")
-        expect(niv?.available).toBe(false)
+    it("all translation IDs are present", () => {
+        const ids = ALL_TRANSLATIONS.map((t) => t.id)
+        expect(ids).toContain("KJV")
+        expect(ids).toContain("ASV")
+        expect(ids).toContain("NIV")
+        expect(ids).toContain("ESV")
+        expect(ids).toContain("NLT")
+        expect(ids).toContain("WEB")
+        expect(ids).toContain("YLT")
     })
 
-    it("marks a translation purchased and makes it available", () => {
+    it("listTranslations returns all translations", () => {
         const store = new BibleStore()
-        store.markPurchased("NIV")
-        expect(store.isAvailable("NIV")).toBe(true)
-        const niv = store.listTranslations().find((t) => t.id === "NIV")
-        expect(niv?.available).toBe(true)
+        expect(store.listTranslations()).toHaveLength(7)
     })
 
-    it("isAvailable returns true for bundled translations", () => {
+    it("lookup resolves via bible-api.com", async () => {
+        const mockJson = { reference: "John 3:16", text: "For God so loved the world..." }
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => mockJson,
+        } as any)
+
         const store = new BibleStore()
-        expect(store.isAvailable("KJV")).toBe(true)
-        expect(store.isAvailable("ASV")).toBe(true)
+        const result = await store.lookup("John 3:16", "KJV")
+        expect(result).not.toBeNull()
+        expect(result?.reference).toBe("John 3:16")
+        expect(result?.translation).toBe("KJV")
     })
 
-    it("isAvailable returns false for unpurchased licensed translations", () => {
+    it("lookup returns null on network error", async () => {
+        global.fetch = vi.fn().mockRejectedValue(new Error("offline"))
         const store = new BibleStore()
-        expect(store.isAvailable("ESV")).toBe(false)
+        const result = await store.lookup("John 3:16", "KJV")
+        expect(result).toBeNull()
+    })
+
+    it("lookup returns null on non-ok response", async () => {
+        global.fetch = vi.fn().mockResolvedValue({ ok: false } as any)
+        const store = new BibleStore()
+        const result = await store.lookup("John 3:16", "KJV")
+        expect(result).toBeNull()
     })
 })

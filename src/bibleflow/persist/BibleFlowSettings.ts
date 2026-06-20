@@ -14,6 +14,8 @@ export interface BibleFlowPersistedSettings {
     transcriptionProvider: "deepgram" | "whisper"
     audioDeviceId: string
     apiToken: string
+    deepgramApiKey: string
+    activeTranslation: string
     licenses: Array<{ key: string; translationId: string; validatedAt: number; offlineValid: boolean }>
 }
 
@@ -25,6 +27,8 @@ export const BIBLEFLOW_SETTINGS_DEFAULTS: BibleFlowPersistedSettings = {
     transcriptionProvider: "whisper",
     audioDeviceId: "",
     apiToken: "",
+    deepgramApiKey: "",
+    activeTranslation: "KJV",
     licenses: [],
 }
 

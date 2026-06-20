@@ -1,164 +1,112 @@
 <script lang="ts">
-    import { LicenseManager, InMemoryLicenseStore } from "../licensing/LicenseManager"
-    import type { License } from "../licensing/LicenseManager"
-    import { onMount } from "svelte"
+    import { ALL_TRANSLATIONS } from "../translations/BibleStore"
+    import { transcriptionProvider } from "./bibleflowPanelStore"
 
-    // Online validator stub — replace with a real server call once you have
-    // a backend. Any correctly-formatted key is accepted for now.
-    async function onlineValidator(key: string, translationId: string): Promise<boolean> {
-        return key.toUpperCase().startsWith("BF") && translationId.length > 0
-    }
+    // Active translation — persisted via BIBLEFLOW_SETTINGS
+    let activeTranslation = "KJV"
+    let loaded = false
 
-    // Use InMemoryLicenseStore as the working store; seed it from persistence
-    // on mount and flush back on every activate/revoke.
-    const licenseStore = new InMemoryLicenseStore()
-    const mgr = new LicenseManager(licenseStore, onlineValidator)
-
-    const TRANSLATIONS = [
-        { id: "KJV",  name: "King James Version",         free: true  },
-        { id: "ASV",  name: "American Standard Version",  free: true  },
-        { id: "NIV",  name: "New International Version",  free: false },
-        { id: "ESV",  name: "English Standard Version",   free: false },
-        { id: "NLT",  name: "New Living Translation",     free: false },
-    ]
-
-    let keyInputs: Record<string, string> = { NIV: "", ESV: "", NLT: "" }
-    let statuses: Record<string, "idle" | "activating" | "ok" | "error"> = {}
-    let errors: Record<string, string> = {}
-    let licensed: Record<string, boolean> = {}
-
-    function refreshLicensed() {
-        TRANSLATIONS.forEach((t) => { licensed[t.id] = t.free || mgr.isLicensed(t.id) })
-        licensed = { ...licensed }
-    }
-
-    async function persistLicenses() {
+    async function load() {
         try {
-            await (window as any).api.invoke("BIBLEFLOW_SETTINGS", {
-                op: "set",
-                data: { licenses: mgr.listLicenses() },
-            })
+            const saved = await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "get" })
+            if (saved?.activeTranslation) activeTranslation = saved.activeTranslation
+        } catch { /* offline / test */ }
+        loaded = true
+    }
+
+    async function select(id: string) {
+        activeTranslation = id
+        try {
+            await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "set", data: { activeTranslation: id } })
         } catch { /* non-fatal */ }
     }
 
-    onMount(async () => {
-        // Seed from persisted licenses
-        try {
-            const saved = await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "get" })
-            const savedLicenses: License[] = saved?.licenses ?? []
-            for (const l of savedLicenses) licenseStore.set(l)
-        } catch { /* offline or test env */ }
-        refreshLicensed()
-    })
-
-    async function activate(translationId: string) {
-        const key = keyInputs[translationId]?.trim()
-        if (!key) { errors[translationId] = "Enter a license key"; errors = { ...errors }; return }
-        statuses[translationId] = "activating"; statuses = { ...statuses }
-        errors[translationId] = ""; errors = { ...errors }
-
-        const result = await mgr.activate(key, translationId)
-        if (result.ok) {
-            statuses[translationId] = "ok"
-            keyInputs[translationId] = ""; keyInputs = { ...keyInputs }
-            refreshLicensed()
-            await persistLicenses()
-        } else {
-            statuses[translationId] = "error"
-            errors[translationId] = result.error ?? "Activation failed"; errors = { ...errors }
-        }
-        setTimeout(() => { if (statuses[translationId] !== "activating") { statuses[translationId] = "idle"; statuses = { ...statuses } } }, 3000)
-    }
-
-    async function revoke(translationId: string) {
-        mgr.revoke(translationId)
-        refreshLicensed()
-        await persistLicenses()
-    }
+    load()
 </script>
 
 <div class="store">
     <div class="store-header">
         <h2>Translations</h2>
-        <p class="sub">Public-domain translations are free. Licensed translations require a key.</p>
+        <p class="sub">All translations are free. Select the one to display with detected verses.</p>
     </div>
 
-    <ul class="translation-list">
-        {#each TRANSLATIONS as t}
-            <li class="translation-row" class:licensed={licensed[t.id]}>
-                <div class="info">
+    <ul class="list">
+        {#each ALL_TRANSLATIONS as t}
+            <li
+                class="row"
+                class:active={activeTranslation === t.id}
+                role="button"
+                tabindex="0"
+                on:click={() => select(t.id)}
+                on:keydown={(e) => e.key === "Enter" && select(t.id)}
+            >
+                <div class="meta">
                     <span class="name">{t.name}</span>
-                    <span class="id-badge">{t.id}</span>
-                    {#if t.free}
-                        <span class="tag free">Free</span>
-                    {:else if licensed[t.id]}
-                        <span class="tag active">Licensed ✓</span>
-                    {:else}
-                        <span class="tag locked">Locked</span>
-                    {/if}
+                    <span class="note">{t.note}</span>
                 </div>
-
-                {#if !t.free}
-                    {#if licensed[t.id]}
-                        <button class="revoke-btn" on:click={() => revoke(t.id)}>Revoke</button>
-                    {:else}
-                        <div class="activate-row">
-                            <input
-                                type="text"
-                                placeholder="BFXX-XXXX-XXXX-XXXX"
-                                bind:value={keyInputs[t.id]}
-                                class:error-input={statuses[t.id] === "error"}
-                                on:keydown={(e) => e.key === "Enter" && activate(t.id)}
-                            />
-                            <button
-                                class="activate-btn"
-                                class:success={statuses[t.id] === "ok"}
-                                class:fail={statuses[t.id] === "error"}
-                                disabled={statuses[t.id] === "activating"}
-                                on:click={() => activate(t.id)}
-                            >
-                                {statuses[t.id] === "activating" ? "…" : statuses[t.id] === "ok" ? "✓" : "Activate"}
-                            </button>
-                        </div>
-                        {#if errors[t.id]}
-                            <p class="err-msg">{errors[t.id]}</p>
-                        {/if}
-                    {/if}
+                <span class="badge">{t.id}</span>
+                {#if activeTranslation === t.id}
+                    <span class="check">✓</span>
                 {/if}
             </li>
         {/each}
     </ul>
 
     <p class="footnote">
-        Keys are validated online at activation and cached for offline use.<br/>
-        Format: <code>BFXX-XXXX-XXXX-XXXX</code>
+        Verse text is fetched from <strong>bible-api.com</strong> — no account required.<br/>
+        Deepgram (cloud transcription) is the only feature that requires an external account.
+        {#if $transcriptionProvider === "deepgram"}
+            Enter your Deepgram API key in the <strong>Transcription</strong> panel on the left.
+        {/if}
     </p>
 </div>
 
 <style>
-    .store { padding: 16px; display: flex; flex-direction: column; gap: 16px; height: 100%; overflow-y: auto; }
+    .store {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        height: 100%;
+        overflow-y: auto;
+    }
     .store-header h2 { font-size: 1.05em; margin: 0 0 4px; color: var(--text); }
     .sub { font-size: 0.78em; color: var(--text-light); margin: 0; }
-    .translation-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-    .translation-row { padding: 12px 14px; border-radius: 8px; background: var(--primary-darker); border: 1px solid var(--primary-lighter); display: flex; flex-direction: column; gap: 8px; }
-    .translation-row.licensed { border-color: #27ae60; }
-    .info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .name { font-weight: 600; font-size: 0.9em; color: var(--text); }
-    .id-badge { font-size: 0.72em; background: var(--primary-lighter); border-radius: 4px; padding: 1px 6px; color: var(--text-light); font-family: monospace; }
-    .tag { font-size: 0.7em; font-weight: 700; padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .free   { background: #1a4a2e; color: #4ade80; }
-    .active { background: #1a3a1a; color: #27ae60; }
-    .locked { background: #3a1a1a; color: #e06060; }
-    .activate-row { display: flex; gap: 6px; }
-    input[type="text"] { flex: 1; background: var(--primary); border: 1px solid var(--primary-lighter); border-radius: 5px; padding: 5px 8px; color: var(--text); font-size: 0.82em; font-family: monospace; letter-spacing: 0.05em; }
-    input.error-input { border-color: #e74c3c; }
-    .activate-btn { padding: 5px 14px; border: none; border-radius: 5px; background: var(--secondary); color: #fff; font-size: 0.82em; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
-    .activate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .activate-btn.success { background: #27ae60; }
-    .activate-btn.fail    { background: #c0392b; }
-    .revoke-btn { align-self: flex-start; padding: 3px 10px; border: 1px solid var(--primary-lighter); border-radius: 4px; background: transparent; color: var(--text-light); font-size: 0.75em; cursor: pointer; }
-    .revoke-btn:hover { color: #e74c3c; border-color: #e74c3c; }
-    .err-msg { font-size: 0.75em; color: #e74c3c; margin: 0; }
-    .footnote { font-size: 0.72em; color: var(--text-light); line-height: 1.6; margin: 0; }
-    code { font-family: monospace; background: var(--primary-darker); padding: 1px 5px; border-radius: 3px; }
+
+    .list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        background: var(--primary-darker);
+        border: 1px solid var(--primary-lighter);
+        cursor: pointer;
+        transition: border-color 0.15s;
+    }
+    .row:hover { border-color: var(--secondary); }
+    .row.active { border-color: var(--secondary); background: color-mix(in srgb, var(--secondary) 10%, var(--primary-darker)); }
+    .meta { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .name { font-size: 0.88em; font-weight: 600; color: var(--text); }
+    .note { font-size: 0.72em; color: var(--text-light); }
+    .badge {
+        font-size: 0.72em;
+        font-family: monospace;
+        background: var(--primary-lighter);
+        border-radius: 4px;
+        padding: 2px 6px;
+        color: var(--text-light);
+        flex-shrink: 0;
+    }
+    .check { color: var(--secondary); font-size: 1em; flex-shrink: 0; }
+    .footnote { font-size: 0.72em; color: var(--text-light); line-height: 1.7; margin: 0; }
+    .footnote strong { color: var(--text); }
 </style>

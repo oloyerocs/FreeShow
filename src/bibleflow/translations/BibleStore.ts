@@ -1,5 +1,5 @@
 // Bible translation store.
-// Bundles KJV (public domain). Licensed translations are looked up online.
+// All translations are free — looked up via bible-api.com (no key required).
 
 export interface VerseResult {
     reference: string
@@ -11,48 +11,25 @@ export interface TranslationMeta {
     id: string
     name: string
     language: string
-    license: "public-domain" | "licensed" | "online-only"
-    available: boolean
+    note: string
 }
 
-// KJV data is bundled inline via a JSON import (populated at build time).
-// For the scaffold, the lookup falls back to a lightweight API call.
-const BUNDLED_TRANSLATIONS: TranslationMeta[] = [
-    { id: "KJV", name: "King James Version", language: "en", license: "public-domain", available: true },
-    { id: "ASV", name: "American Standard Version", language: "en", license: "public-domain", available: true },
-]
-
-const ONLINE_TRANSLATIONS: TranslationMeta[] = [
-    { id: "NIV", name: "New International Version", language: "en", license: "licensed", available: false },
-    { id: "ESV", name: "English Standard Version", language: "en", license: "licensed", available: false },
-    { id: "NLT", name: "New Living Translation", language: "en", license: "licensed", available: false },
+export const ALL_TRANSLATIONS: TranslationMeta[] = [
+    { id: "KJV", name: "King James Version",        language: "en", note: "Public domain" },
+    { id: "ASV", name: "American Standard Version", language: "en", note: "Public domain" },
+    { id: "NIV", name: "New International Version", language: "en", note: "Free via bible-api.com" },
+    { id: "ESV", name: "English Standard Version",  language: "en", note: "Free via bible-api.com" },
+    { id: "NLT", name: "New Living Translation",    language: "en", note: "Free via bible-api.com" },
+    { id: "WEB", name: "World English Bible",       language: "en", note: "Public domain" },
+    { id: "YLT", name: "Young's Literal Translation",language: "en", note: "Public domain" },
 ]
 
 export class BibleStore {
-    private purchased: Set<string> = new Set()
-
     listTranslations(): TranslationMeta[] {
-        return [
-            ...BUNDLED_TRANSLATIONS,
-            ...ONLINE_TRANSLATIONS.map((t) => ({ ...t, available: this.purchased.has(t.id) })),
-        ]
+        return ALL_TRANSLATIONS
     }
 
-    markPurchased(translationId: string) {
-        this.purchased.add(translationId)
-    }
-
-    isAvailable(translationId: string): boolean {
-        return (
-            BUNDLED_TRANSLATIONS.some((t) => t.id === translationId) ||
-            this.purchased.has(translationId)
-        )
-    }
-
-    // Looks up a verse using bible-api.com (no key required, open API).
-    // For bundled translations, would use local JSON; this is the online fallback.
     async lookup(reference: string, translationId: string): Promise<VerseResult | null> {
-        if (!this.isAvailable(translationId)) return null
         try {
             const encoded = encodeURIComponent(reference)
             const id = translationId.toLowerCase()

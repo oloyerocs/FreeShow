@@ -10,6 +10,22 @@
 
     let devices: MediaDeviceInfo[] = []
     let adapter: any = null
+    let deepgramApiKey = ""
+    let showKey = false
+
+    // Load saved Deepgram key on mount
+    ;(async () => {
+        try {
+            const saved = await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "get" })
+            if (saved?.deepgramApiKey) deepgramApiKey = saved.deepgramApiKey
+        } catch { /* offline / test */ }
+    })()
+
+    async function saveDeepgramKey() {
+        try {
+            await (window as any).api.invoke("BIBLEFLOW_SETTINGS", { op: "set", data: { deepgramApiKey } })
+        } catch { /* non-fatal */ }
+    }
 
     async function loadDevices() {
         try {
@@ -31,12 +47,14 @@
             return new WhisperAdapter()
         }
         const { DeepgramAdapter } = await import("../transcription-adapter/DeepgramAdapter")
-        // API key should come from secure storage in production
-        const key = (window as any).__DEEPGRAM_KEY__ || ""
-        return new DeepgramAdapter(key)
+        return new DeepgramAdapter(deepgramApiKey)
     }
 
     async function start() {
+        if ($transcriptionProvider === "deepgram" && !deepgramApiKey.trim()) {
+            transcriptionError.set("Enter your Deepgram API key before starting.")
+            return
+        }
         transcriptionError.set(null)
         transcriptionStatus.set("running")
         try {
@@ -68,10 +86,46 @@
 
     <div class="row">
         <select bind:value={$transcriptionProvider} disabled={$transcriptionStatus === "running"}>
-            <option value="whisper">Whisper (local)</option>
-            <option value="deepgram">Deepgram (cloud)</option>
+            <option value="whisper">Whisper (local, free)</option>
+            <option value="deepgram">Deepgram (cloud — requires API key)</option>
         </select>
     </div>
+
+    {#if $transcriptionProvider === "deepgram"}
+        <div class="row key-row">
+            <label for="dgkey">Deepgram API key</label>
+            <div class="key-input-wrap">
+                {#if showKey}
+                    <input
+                        id="dgkey"
+                        type="text"
+                        bind:value={deepgramApiKey}
+                        on:blur={saveDeepgramKey}
+                        placeholder="dg_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        disabled={$transcriptionStatus === "running"}
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                {:else}
+                    <input
+                        id="dgkey"
+                        type="password"
+                        bind:value={deepgramApiKey}
+                        on:blur={saveDeepgramKey}
+                        placeholder="Enter Deepgram API key"
+                        disabled={$transcriptionStatus === "running"}
+                        autocomplete="off"
+                    />
+                {/if}
+                <button class="eye" title={showKey ? "Hide" : "Show"} on:click={() => showKey = !showKey} tabindex="-1">
+                    {showKey ? "🙈" : "👁"}
+                </button>
+            </div>
+            <p class="key-hint">
+                Get a free key at <strong>deepgram.com</strong> — required only for cloud transcription.
+            </p>
+        </div>
+    {/if}
 
     {#if devices.length}
         <div class="row">
@@ -113,9 +167,7 @@
         color: var(--text-light);
         margin: 0 0 8px;
     }
-    .row {
-        margin-bottom: 6px;
-    }
+    .row { margin-bottom: 6px; }
     select {
         width: 100%;
         background: var(--primary-darker);
@@ -125,6 +177,30 @@
         padding: 4px 6px;
         font-size: 0.82em;
     }
+    .key-row { display: flex; flex-direction: column; gap: 4px; }
+    .key-row label { font-size: 0.75em; color: var(--text-light); }
+    .key-input-wrap { display: flex; gap: 4px; }
+    .key-input-wrap input {
+        flex: 1;
+        background: var(--primary-darker);
+        color: var(--text);
+        border: 1px solid var(--primary-lighter);
+        border-radius: 4px;
+        padding: 4px 6px;
+        font-size: 0.78em;
+        font-family: monospace;
+    }
+    .key-input-wrap input:focus { outline: none; border-color: var(--secondary); }
+    .eye {
+        background: var(--primary-darker);
+        border: 1px solid var(--primary-lighter);
+        border-radius: 4px;
+        cursor: pointer;
+        padding: 2px 5px;
+        font-size: 0.85em;
+    }
+    .key-hint { font-size: 0.7em; color: var(--text-light); margin: 0; }
+    .key-hint strong { color: var(--text); }
     .start-btn {
         width: 100%;
         padding: 6px;
@@ -140,16 +216,10 @@
         gap: 6px;
         margin-top: 4px;
     }
-    .start-btn.running {
-        background: #c0392b;
-    }
-    .start-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
+    .start-btn.running { background: #c0392b; }
+    .start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .dot {
-        width: 8px;
-        height: 8px;
+        width: 8px; height: 8px;
         border-radius: 50%;
         background: #fff;
         animation: pulse 1s ease-in-out infinite;
@@ -158,9 +228,5 @@
         0%, 100% { opacity: 1; }
         50% { opacity: 0.3; }
     }
-    .error {
-        margin: 4px 0 0;
-        font-size: 0.75em;
-        color: #e74c3c;
-    }
+    .error { margin: 4px 0 0; font-size: 0.75em; color: #e74c3c; }
 </style>
