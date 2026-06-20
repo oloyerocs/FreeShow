@@ -15,6 +15,7 @@
     import Resizeable from "./components/system/Resizeable.svelte"
     import Timeline from "./components/timeline/Timeline.svelte"
     import { activeEdit, activePage, activeProfile, activeProject, activeShow, activeStage, currentWindow, focusMode, loaded, os, projectView, resized, showChangeProfileMenu, showsCache, special, textEditActive } from "./stores"
+    import { BIBLEFLOW_ENABLED } from "../bibleflow/config"
     import { DEFAULT_WIDTH } from "./utils/common"
 
     $: page = $activePage
@@ -50,6 +51,8 @@
                     <DrawTabs />
                 {:else if page === "settings"}
                     <SettingsTabs />
+                {:else if page === "bibleflow" && BIBLEFLOW_ENABLED}
+                    <!-- BibleFlow panel occupies the full center+left area; left panel intentionally empty -->
                 {/if}
             </div>
         </Resizeable>
@@ -69,6 +72,8 @@
                 <LazyLoad component={() => import("./components/settings/Settings.svelte")} show={page === "settings"} />
             {:else if page === "stage"}
                 <LazyLoad component={() => import("./components/stage/StageLayout.svelte")} show={page === "stage"} />
+            {:else if page === "bibleflow" && BIBLEFLOW_ENABLED}
+                <LazyLoad component={() => import("../bibleflow/panel/BibleFlowPanel.svelte")} show={page === "bibleflow"} />
             {/if}
         </div>
 

@@ -1,6 +1,7 @@
 <script type="ts">
     import { slide } from "svelte/transition"
     import { activeEdit, activePage, activeProfile, activeProject, activeShow, cloudUsers, dictionary, drawSettings, drawTool, os, outputDisplay, outputs, paintCache, profiles, saved, settingsTab, shows } from "../../stores"
+    import { BIBLEFLOW_ENABLED } from "../../../bibleflow/config"
     import { getCloudUsers } from "../../utils/cloudSync"
     import { translateText } from "../../utils/language"
     import Icon from "../helpers/Icon.svelte"
@@ -110,6 +111,9 @@
         <TopButton id="show" />
         <TopButton id="edit" disabled={editDisabled} />
         <TopButton id="stage" />
+        {#if BIBLEFLOW_ENABLED}
+            <TopButton id="bibleflow" />
+        {/if}
     </span>
     <span style="width: var(--navigation-width);justify-content: flex-end;">
         <TopButton id="draw" red={$drawTool === "fill" || ($drawTool === "zoom" && $drawSettings.zoom?.size !== 100) || !!($drawTool === "paint" && $paintCache?.length)} hideLabel />
