@@ -3,7 +3,7 @@
 
 import type { Rectangle } from "electron"
 import { BrowserWindow, Menu, app, ipcMain, powerSaveBlocker, protocol, screen } from "electron"
-import { AUDIO, BLACKMAGIC, CLOUD, EXPORT, MAIN, NDI, OUTPUT, STARTUP } from "../types/Channels"
+import { AUDIO, BIBLEFLOW, BLACKMAGIC, CLOUD, EXPORT, MAIN, NDI, OUTPUT, STARTUP } from "../types/Channels"
 import { Main } from "../types/IPC/Main"
 import type { Dictionary } from "../types/Settings"
 import { receiveAudio } from "./audio/receiveAudio"
@@ -357,6 +357,7 @@ ipcMain.on(CLOUD, cloudConnect)
 ipcMain.on(NDI, receiveNDI)
 ipcMain.on(BLACKMAGIC, receiveBM)
 ipcMain.on(AUDIO, receiveAudio)
+ipcMain.on(BIBLEFLOW, (_e, msg) => OutputHelper.Send.sendToOutputWindow(msg))
 
 // send messages to main frontend (should not be used anymore - use sendMain() instead)
 export const toApp = (channel: string, ...args: any[]): void => {
