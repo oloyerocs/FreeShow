@@ -3,7 +3,7 @@
 ## Session Status
 
 **Last updated:** 2026-06-20  
-**Current phase:** Phase 0 complete — awaiting go-ahead for Phase 1
+**Current phase:** Phase 1 complete — awaiting go-ahead for Phase 2
 
 ---
 
@@ -14,24 +14,29 @@
 - [x] Cloned to `C:\projects\FreeShow`
 - [x] Upstream remote added → `https://github.com/ChurchApps/FreeShow.git`
 - [x] Branch `feat/bibleflow-integration` created and checked out
-- [x] npm install running (in progress at end of session)
-- [x] Codebase investigated — findings documented below
-- [x] BibleFlow directory scaffold created (empty folders + READMEs)
+- [x] Dependencies installed (`npm install --ignore-scripts`)
+- [x] All 37 existing FreeShow unit tests pass
+- [x] BibleFlow directory scaffold created
+- [x] **Phase 1 (FR-01)** — BibleFlow display integration implemented and tested
 
-## What's In Progress
-
-- [ ] npm install completion + dependency verification
-- [ ] Build verification (will need `npm run build` or `npm start`)
-- [ ] Existing test suite run (`npm test`)
+### Phase 1 files changed
+| File | Change |
+|------|--------|
+| `src/types/Channels.ts` | Added `BIBLEFLOW` channel constant + `ValidChannels` type |
+| `src/electron/index.ts` | Registered `ipcMain.on(BIBLEFLOW)` → forwards to `OutputSend.sendToOutputWindow` |
+| `src/bibleflow/config.ts` | `BIBLEFLOW_ENABLED` flag, `BibleFlowVerseMessage` type, `DEFAULT_THEME` |
+| `src/bibleflow/display-renderer/BibleFlowOverlay.svelte` | Verse overlay component; listens for `BIBLEFLOW_VERSE` on the `BIBLEFLOW` IPC channel |
+| `src/frontend/MainOutput.svelte` | Mounts `<BibleFlowOverlay />` when `BIBLEFLOW_ENABLED` is true |
+| `src/bibleflow/bibleflow-display.test.ts` | 9 smoke tests — all pass (46 total) |
 
 ## What's Next
 
-- Phase 1: External Display Decision (FR-01)
+- Phase 2: Core Features (FR-02 through FR-12)
 - Waiting for explicit go-ahead from user
 
 ## Open Decisions
 
-- None yet — Phase 1 decision will be documented here after go-ahead
+- **Phase 1 choice:** Option A (Integrate) — confirmed. BibleFlow reuses `OutputSend.sendToOutputWindow()` via a new `BIBLEFLOW` IPC channel. `BIBLEFLOW_VERSE` sub-channel triggers the overlay in `MainOutput.svelte`. No second window.
 
 ---
 
